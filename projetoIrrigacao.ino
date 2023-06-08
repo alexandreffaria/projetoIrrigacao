@@ -1,4 +1,6 @@
 #include <RtcDS1302.h>
+#include <EEPROM.h>
+
 
 ThreeWire myWire(4,5,2); // IO, SCLK, CE
 RtcDS1302<ThreeWire> Rtc(myWire);
@@ -6,7 +8,8 @@ RtcDS1302<ThreeWire> Rtc(myWire);
 
 const int relayPin = 6; // Pino do rele
 const int moistureSensorPin = A0; // Pino do sensor de humidade
-
+const int eepromAddress = 0;
+RtcDateTime EEPROMData;
 
 void setup() {
   Serial.begin(9600); // Set the baud rate to 9600
@@ -17,40 +20,77 @@ void setup() {
 
 
   //RTC
-  Serial.print("Preparando RTC: ");
-  Serial.print(__DATE__);
-  Serial.println(__TIME__);
-
   Rtc.Begin();
 
   RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
+  Serial.println();
+  Serial.print("Compilado as: ");
   printDateTime(compiled);
   Serial.println();
-
 
 }
 
 void loop() {
+  // Serial.println("1 - Ligar Rele");
+  // Serial.println("2 - Desligar Rele");
+  // Serial.println("3 - Ler Humidade do solo");
+  // Serial.println("4 - Ler dia e hora");
+  // Serial.println("5 - Adicionar 4 dias");
 
-  Serial.println("1 - Ligar Rele");
-  Serial.println("2 - Desligar Rele");
-  Serial.println("3 - Ler Humidade do solo");
-  Serial.println("4 - Ler dia e hora");
-  Serial.println("5 - Adicionar 4 dias");
+  // Le a data salva no EEPROM
+  EEPROM.get(eepromAddress, EEPROMData);
+  Serial.print("Data lida do EEPROM: ");
+  printDateTime(EEPROMData);
+
+  //
+  RtcDateTime irrigacao = proximaIrrigacao(EEPROMData, 4);
+  // printDateTime(irrigacao);
+  
+  RtcDateTime agora = Rtc.GetDateTime();
+  Serial.print("GetDate Agora: ");
+  printDateTime(agora);
+
+  if(EEPROMData.Second() == agora.Second()){
+    Serial.println("Dia de irrigar");
+
+    while(lerHumidade() < 80 ){
+      Serial.println(lerHumidade());
+      ligarRele();
+    }
+    desligarRele();
+
+
+    //Atualiza EEPROM pra próxima data
+    RtcDateTime irrigacao = proximaIrrigacaoEEPROM(EEPROMData, 4);
+    Serial.print("Proxima Irrigacao EEPROM: ");
+    printDateTime(irrigacao);
+    EEPROM.put(eepromAddress, irrigacao);
+  }
+  else{
+    Serial.println("Dia de esperar");
+  }
+  
 
   if (Serial.available() > 0) {
-    char command = Serial.read(); // Read the incoming command
+    char comando = Serial.read(); // Comando pra executar um teste
+
+    // Discard any remaining characters in the serial buffer
+    while (Serial.available() > 0) {
+      Serial.read(); // Discarta tudo que não for o primeiro char lido
+    }
     
-    // Perform actions based on the received command
-    switch (command) {
+    // Teste das funcionalidades
+    switch (comando) {
       case '1':
         Serial.println("Ligando Rele...");
         ligarRele();
+        Serial.println("Rele ligado...");
         break;
         
       case '2':
         Serial.println("Desligando Rele...");
         desligarRele();
+        Serial.println("Rele desligado...");
         break;
 
       case '3':
@@ -59,26 +99,30 @@ void loop() {
         break;
 
       case '4':
-        Serial.println("Lendo data e hora...");
-        RtcDateTime dataAgora = lerDataHora();
-        printDateTime(dataAgora);
+        Serial.println("Olhando o calendário...");
+        printDateTime(lerDataHora());
         break;
-      // case '9':
-      //   Serial.println("Adicionando 4 dias...");
-      //   break;
-      // // case '5':
-      // //   Serial.println("Adicionando 4 dias...");
-      // //   // proximaIrrigacao(lerDataHora());
-      // //   break;
-      default:
-        // Handle invalid commands
+
+      case '5':
+        Serial.println("Adicionando 4 dias...");
+        RtcDateTime dia = lerDataHora();
+        proximaIrrigacao(dia, 4);
+        Serial.println();
+        break;
+
+      case '6':
+        Serial.println("Lendo do EEPROM...");
+        
+        break;
+        
+      default:  
         Serial.println("Comando Invalido");
         break;
     }
   }
 
 
-  delay(3000);
+  delay(500);
 }
 
 
@@ -91,8 +135,8 @@ void desligarRele(){
 }
 
 int lerHumidade(){
-  const int calibragemSeco = 500; // Analog reading when the sensor is dry
-  const int calibragemMolhado = 200; // Analog reading when the sensor is wet
+  const int calibragemSeco = 650; // Analog reading when the sensor is dry
+  const int calibragemMolhado = 350; // Analog reading when the sensor is wet
   int moisture = analogRead(moistureSensorPin);
   int moisturePercentage = map(moisture, calibragemSeco, calibragemMolhado, 0, 100);
   return moisturePercentage;
@@ -113,12 +157,12 @@ void printDateTime(const RtcDateTime& dt)
             dt.Hour(),
             dt.Minute(),
             dt.Second() );
-    Serial.print(datestring);
+    Serial.println(datestring);
 }
 
 RtcDateTime lerDataHora(){
-  RtcDateTime dataHoraAgora = RtcDateTime(__DATE__, __TIME__);
-  return dataHoraAgora;
+  RtcDateTime dia = Rtc.GetDateTime();
+  return dia;
 }
 
 unsigned long diasSegundos(int dias) {
@@ -128,9 +172,17 @@ unsigned long diasSegundos(int dias) {
 
 
 // += segundos para adicionar dias a data lida
-void proximaIrrigacao(RtcDateTime data){
-  Serial.println("proximaIrrigacao()");
-  uint32_t diasEmSegundos = diasSegundos(4);
+RtcDateTime proximaIrrigacao(RtcDateTime data, int dias){
+  uint32_t diasEmSegundos = diasSegundos(dias);
   data += diasEmSegundos;
-  printDateTime(data);
+  return data;
 }
+
+// += segundos para adicionar dias a data lida
+RtcDateTime proximaIrrigacaoEEPROM(RtcDateTime& data, int dias){
+  // uint32_t diasEmSegundos = diasSegundos(dias);
+  uint32_t diasEmSegundos = 60;
+  data += diasEmSegundos;
+  return data;
+}
+
