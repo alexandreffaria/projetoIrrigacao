@@ -139,7 +139,12 @@ void loop() {
   }
 
   // Olha a hora a cada 5 minutos
-  delay(50000);
+  Serial.print("Esperando mais ");
+  Serial.print(5);
+  Serial.print(" minutos pra olhar o relogio de novo...");
+  
+  delay(minutosToMillis(5));
+
 }
 
 
@@ -198,8 +203,10 @@ RtcDateTime proximaIrrigacao(RtcDateTime data, int dias){
 // += segundos para adicionar dias a data lida
 RtcDateTime proximaIrrigacaoEEPROM(RtcDateTime& data, int dias){
   uint32_t diasEmSegundos = diasSegundos(dias);
-  // uint32_t diasEmSegundos = 60;
   data += diasEmSegundos;
   return data;
 }
 
+unsigned long minutosToMillis(int minutos){
+  return (unsigned long)minutos * 60 * 1000;
+}
