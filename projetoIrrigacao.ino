@@ -28,43 +28,60 @@ void setup() {
   printDateTime(compiled);
   Serial.println();
 
-}
 
-void loop() {
+  // Funcionalidades
   // Serial.println("1 - Ligar Rele");
   // Serial.println("2 - Desligar Rele");
   // Serial.println("3 - Ler Humidade do solo");
   // Serial.println("4 - Ler dia e hora");
   // Serial.println("5 - Adicionar 4 dias");
 
+}
+
+void loop() {
+  
   // Le a data salva no EEPROM
   EEPROM.get(eepromAddress, EEPROMData);
   Serial.print("Data lida do EEPROM: ");
   printDateTime(EEPROMData);
 
-  //
-  RtcDateTime irrigacao = proximaIrrigacao(EEPROMData, 4);
-  // printDateTime(irrigacao);
-  
   RtcDateTime agora = Rtc.GetDateTime();
-  Serial.print("GetDate Agora: ");
+  Serial.print("Data lida agora: ");
   printDateTime(agora);
 
-  if(EEPROMData.Second() == agora.Second()){
-    Serial.println("Dia de irrigar");
+  // Útil pra testar a funcionalidade a cada minuto
+  // if(EEPROMData.Second() == agora.Second()){
+  if(EEPROMData.Day() == agora.Day() && EEPROMData.Hour() == agora.Hour()){
+    
+    Serial.println("Dia e Hora de irrigar");
 
-    while(lerHumidade() < 80 ){
-      Serial.println(lerHumidade());
-      ligarRele();
+    unsigned long startTime = millis(); 
+
+    while(true){
+      int leituraHumidade = lerHumidade();
+
+      if (leituraHumidade > 80){
+        // Parar se humidade maior que 80%
+        desligarRele();
+        break;
+      }
+
+      // Inicia um relógio
+      unsigned long currentTime = millis();
+
+      // Desliga o relé se passar mais de 20 segundos
+      if (currentTime - startTime >= 20000) {
+        desligarRele();
+        break;
+      }
+
     }
-    desligarRele();
-
 
     //Atualiza EEPROM pra próxima data
-    RtcDateTime irrigacao = proximaIrrigacaoEEPROM(EEPROMData, 4);
+    RtcDateTime proxirrigacao = proximaIrrigacaoEEPROM(EEPROMData, 4);
     Serial.print("Proxima Irrigacao EEPROM: ");
-    printDateTime(irrigacao);
-    EEPROM.put(eepromAddress, irrigacao);
+    printDateTime(proxirrigacao);
+    EEPROM.put(eepromAddress, proxirrigacao);
   }
   else{
     Serial.println("Dia de esperar");
@@ -121,8 +138,8 @@ void loop() {
     }
   }
 
-
-  delay(500);
+  // Olha a hora a cada 5 minutos
+  delay(50000);
 }
 
 
@@ -135,8 +152,8 @@ void desligarRele(){
 }
 
 int lerHumidade(){
-  const int calibragemSeco = 650; // Analog reading when the sensor is dry
-  const int calibragemMolhado = 350; // Analog reading when the sensor is wet
+  const int calibragemSeco = 520; // Analog reading when the sensor is dry
+  const int calibragemMolhado = 230; // Analog reading when the sensor is wet
   int moisture = analogRead(moistureSensorPin);
   int moisturePercentage = map(moisture, calibragemSeco, calibragemMolhado, 0, 100);
   return moisturePercentage;
@@ -180,8 +197,8 @@ RtcDateTime proximaIrrigacao(RtcDateTime data, int dias){
 
 // += segundos para adicionar dias a data lida
 RtcDateTime proximaIrrigacaoEEPROM(RtcDateTime& data, int dias){
-  // uint32_t diasEmSegundos = diasSegundos(dias);
-  uint32_t diasEmSegundos = 60;
+  uint32_t diasEmSegundos = diasSegundos(dias);
+  // uint32_t diasEmSegundos = 60;
   data += diasEmSegundos;
   return data;
 }
