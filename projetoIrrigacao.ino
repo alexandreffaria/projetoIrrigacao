@@ -123,7 +123,7 @@ void loop() {
       case '5':
         Serial.println("Adicionando 4 dias...");
         RtcDateTime dia = lerDataHora();
-        proximaIrrigacao(dia, 4);
+        proximaIrrigacaoEEPROM(dia, 4);
         Serial.println();
         break;
 
@@ -190,14 +190,6 @@ RtcDateTime lerDataHora(){
 unsigned long diasSegundos(int dias) {
   unsigned long segundos = (unsigned long)dias * 24 * 60 * 60;
   return segundos;
-}
-
-
-// += segundos para adicionar dias a data lida
-RtcDateTime proximaIrrigacao(RtcDateTime data, int dias){
-  uint32_t diasEmSegundos = diasSegundos(dias);
-  data += diasEmSegundos;
-  return data;
 }
 
 // += segundos para adicionar dias a data lida
